@@ -1,3 +1,4 @@
+import re
 import secrets
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import RedirectResponse
@@ -5,6 +6,7 @@ from pydantic import BaseModel, HttpUrl
 
 class ShortenRequest(BaseModel):
     original_url: HttpUrl
+    custom_alias: str | None = None
 
 url_store = {}
 
@@ -36,9 +38,17 @@ def health_check():
         "status": "healthy",
         "application": "LinkForge"
     }
+
 @app.post("/shorten", status_code=status.HTTP_201_CREATED)
 def shorten_url(request: ShortenRequest):
-    short_code = generate_short_code()
+    if request.custom_alias:
+        if not re.fullmatch(r"[a-zA-Z0-9_-]+", request.custom_alias):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Alias can only contain letters, numbers, hyphens, and underscores")
+        if request.custom_alias in url_store:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Custom alias already exists.")
+        short_code = request.custom_alias
+    else:
+        short_code = generate_short_code()
     url_store[short_code] = str(request.original_url)
     return {
         "original_url" : str(request.original_url),
